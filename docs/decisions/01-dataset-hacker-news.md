@@ -2,7 +2,7 @@
 
 **Status:** Accepted — open risks since resolved, see [04](./04-embedding-model.md)
 **Date:** 2026-07-17
-**Related:** [02](./02-agent-architecture.md), [03](./03-oltp-olap-split.md), [04](./04-embedding-model.md), [dataset reference](../reference/clickhouse-datasets.md)
+**Related:** [02](./02-agent-architecture.md), [03](./03-session-storage.md), [04](./04-embedding-model.md), [dataset reference](../reference/clickhouse-datasets.md)
 
 ## Context
 
@@ -24,7 +24,9 @@ Constraints:
 
 **Vectors and analytics in one engine.** HN rows carry embeddings *and* structured metadata (score, timestamp, author, type, parent) on the same row. Semantic similarity and analytical filtering compose into a single ClickHouse query with no bolt-on vector database. This is our answer to "why ClickHouse" and it is an architectural argument, not a demo trick.
 
-**The corpus is live.** HN's Firebase API publishes stories and comments continuously. A Trigger.dev scheduled ingest becomes *necessary* rather than ornamental, and "real-time data layer" becomes literally true instead of a claim over a static dump.
+**The corpus can be made live.** HN's Firebase API publishes stories and comments continuously, so a Trigger.dev scheduled ingest becomes *necessary* rather than ornamental.
+
+⚠️ **Corrected 2026-07-17.** This originally read "the corpus is live." It is not. Verified against the loaded data: the dataset spans **2006-10-09 → 2021-10-03**. What is live is the *API*, not the dataset. There is a **~4.75 year gap** to today, and closing it means fetching and embedding ~14M posts — not feasible alongside the agent build. Historical analysis works to 2021; ingested posts land in 2026; nothing sits between. A judge will ask. Gap strategy is undecided — the user paused it.
 
 **Developer-native.** Judges have lived in this data. No domain explanation burns the 5-minute video, and "why did this post blow up" is a question they have actually asked.
 
@@ -57,7 +59,7 @@ Constraints:
 
 **Good:** scores on tool usage, problem fit, innovation, and presentation simultaneously.
 
-**~~Risk — embedding model mismatch.~~ RESOLVED** → [04](./04-embedding-model.md). The corpus uses `all-MiniLM-L6-v2` at 384 dims. We match it with Transformers.js in-task. The mitigation (a similarity smoke test against known-good stored vectors) is recorded there.
+**~~Risk — embedding model mismatch.~~ RESOLVED** → [04](./04-embedding-model.md). The corpus uses `all-MiniLM-L6-v2` at 384 dims; we match it with Transformers.js in-task, verified by retrieval probes against the live corpus. (The mitigation this line originally named — re-embedding rows and asserting cosine ≈ 1.0 against stored vectors — was itself wrong and is retracted in `04`.)
 
 **~~Risk — vector index syntax drift.~~ RESOLVED** — confirmed current syntax below.
 
