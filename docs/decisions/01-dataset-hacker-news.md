@@ -1,8 +1,8 @@
 # 01 — Dataset: Hacker News + vector embeddings
 
-**Status:** Accepted
+**Status:** Accepted — open risks since resolved, see [04](./04-embedding-model.md)
 **Date:** 2026-07-17
-**Related:** [02](./02-agent-architecture.md), [03](./03-oltp-olap-split.md), [dataset reference](../reference/clickhouse-datasets.md)
+**Related:** [02](./02-agent-architecture.md), [03](./03-oltp-olap-split.md), [04](./04-embedding-model.md), [dataset reference](../reference/clickhouse-datasets.md)
 
 ## Context
 
@@ -55,10 +55,54 @@ Constraints:
 
 ## Consequences
 
-**Good:** scores on tool usage, problem fit, innovation, and presentation simultaneously. Sets up the OLTP+OLAP bonus for free (see [03](./03-oltp-olap-split.md)).
+**Good:** scores on tool usage, problem fit, innovation, and presentation simultaneously.
 
-**Risk — embedding model mismatch.** Newly ingested posts must be embedded with the *same model and dimensions* as the prebuilt dataset, or new vectors are not comparable to old ones and hybrid retrieval silently degrades. **Verify before ingesting anything.** This is the single most likely way this decision fails.
+**~~Risk — embedding model mismatch.~~ RESOLVED** → [04](./04-embedding-model.md). The corpus uses `all-MiniLM-L6-v2` at 384 dims. We match it with Transformers.js in-task. The mitigation (a similarity smoke test against known-good stored vectors) is recorded there.
 
-**Risk — vector index syntax drift.** ClickHouse vector similarity indexes and QBit have moved fast. Check current docs; do not trust older examples.
+**~~Risk — vector index syntax drift.~~ RESOLVED** — confirmed current syntax below.
 
-**Accepted cost:** we are not competing on raw scale. 28M rows will not out-flex a 20B-row submission on the 10% scalability criterion. We trade that for winning the 25% and 20% buckets.
+**Accepted cost:** we are not competing on raw scale. 28.74M rows will not out-flex a 20B-row submission on the 10% scalability criterion. We trade that for winning the 25% and 20% buckets.
+
+## Confirmed facts
+
+Source: [ClickHouse HN vector search dataset docs](https://clickhouse.com/docs/getting-started/example-datasets/hackernews-vector-search-dataset).
+
+**28.74M rows**, single Parquet file:
+
+```sql
+INSERT INTO hackernews
+SELECT * FROM s3('https://clickhouse-datasets.s3.amazonaws.com/hackernews-miniLM/hackernews_part_1_of_1.parquet');
+```
+
+```sql
+CREATE TABLE hackernews
+(
+    `id` Int32,
+    `doc_id` Int32,
+    `text` String,
+    `vector` Array(Float32),          -- 384 dims, all-MiniLM-L6-v2
+    `node_info` Tuple(start Nullable(UInt64), end Nullable(UInt64)),
+    `metadata` String,
+    `type` Enum8('story'=1, 'comment'=2, 'poll'=3, 'pollopt'=4, 'job'=5),
+    `by` LowCardinality(String),
+    `time` DateTime,
+    `title` String,
+    `post_score` Int32,
+    `dead` UInt8,
+    `deleted` UInt8,
+    `length` UInt32
+)
+ENGINE = MergeTree
+ORDER BY id;
+```
+
+```sql
+ALTER TABLE hackernews ADD INDEX vector_index vector
+TYPE vector_similarity('hnsw', 'cosineDistance', 384, 'bf16', 64, 512);
+
+ALTER TABLE hackernews MATERIALIZE INDEX vector_index SETTINGS mutations_sync = 2;
+```
+
+**This schema validates the whole decision.** `vector` sits on the same row as `post_score`, `time`, `by`, and `type` — so semantic similarity and analytical predicates compose in one query, on one engine. That is the hybrid retrieval hook, confirmed rather than assumed.
+
+**Note:** the stock table is `ORDER BY id`, which is fine for the bulk load but is *not* optimised for our query shape. Revisit the ordering key once we know what the agent actually filters on.
