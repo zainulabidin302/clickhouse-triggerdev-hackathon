@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "trigger": {
+      "args": [
+        "trigger.dev@latest",
+        "mcp",
+        "--project-ref",
+        "proj_tfzflqzobnbwhitxnzpe"
+      ],
+      "command": "npx"
+    }
+  }
+}
