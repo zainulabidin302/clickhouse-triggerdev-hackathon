@@ -1,4 +1,4 @@
-import { defineConfig } from "@trigger.dev/sdk/v3";
+import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({
   project: "proj_tfzflqzobnbwhitxnzpe",
@@ -19,4 +19,16 @@ export default defineConfig({
     },
   },
   dirs: ["./src/trigger"],
+  build: {
+    // @huggingface/transformers loads onnxruntime-node's native .node binary via
+    // a computed require path (`../bin/napi-v6/${platform}/${arch}/...`), which
+    // esbuild cannot bundle and autoDetectExternal cannot see through — it only
+    // matches static requires. Naming it here keeps it a runtime dependency.
+    //
+    // Both packages must be listed by package name: the docs require any package
+    // that installs a native binary or uses WASM to be external. Externals get an
+    // auto-generated package.json in the build dir and are npm-installed into the
+    // deployed image, so this works in prod too.
+    external: ["onnxruntime-node", "@huggingface/transformers"],
+  },
 });

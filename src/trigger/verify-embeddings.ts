@@ -1,4 +1,4 @@
-import { logger, task } from "@trigger.dev/sdk/v3";
+import { logger, task } from "@trigger.dev/sdk";
 import { query } from "../clickhouse.js";
 import { embedOne, EMBEDDING_DIMS, EMBEDDING_MODEL } from "../embed.js";
 

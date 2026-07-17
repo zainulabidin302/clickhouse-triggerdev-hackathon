@@ -72,12 +72,37 @@ Each of these was hit or nearly hit. They fail **silently** — nothing errors, 
 
 **Query distance function must match the index** (`cosineDistance`), or the index is silently ignored. Prove usage with `EXPLAIN indexes = 1` — it must show `Skip` with the index name.
 
-**Deployed tasks can't read `.env`.** Local `.env` covers dev only; deployed Trigger.dev tasks need env vars set in the Trigger.dev dashboard.
+**Deployed tasks can't read `.env`.** Local `.env` covers dev only. Deployed tasks need env vars set in the dashboard, or synced via the `syncEnvVars` build extension. The docs call this the #1 cause of "worked in dev, 500s in prod."
 
-**`trigger.config.ts` imports from `@trigger.dev/sdk/v3` while the SDK is v4.5.4.** Intentional — `./v3` is the compatibility export and resolves fine. Leave it.
+**The default machine is `small-1x` — 0.5 vCPU / 0.5 GB.** The ONNX model plus tokenizer plus fp32 tensors runs 400MB–1GB resident, so anything embedding needs `medium-1x` or larger. It OOMs only when deployed, and Free-plan log retention is 1 day.
+
+**Native/WASM packages must be in `build.external` by package name** — both `onnxruntime-node` and `@huggingface/transformers`. `autoDetectExternal` is on by default but cannot see through computed require paths, so it misses them.
+
+**Always import from `@trigger.dev/sdk`.** Never `@trigger.dev/sdk/v3` — it's a deprecated alias that still resolves, which is why it's easy to leave in place. It's also what makes assistants emit v3-era code.
 
 ## SDK notes
 
-Trigger.dev SDK 4.5.4 ships chat-agent primitives that fit this theme directly: `@trigger.dev/sdk/ai` (`chatAgent`, `pipeChat`, tools, skills runtime), `@trigger.dev/sdk/chat` (`TriggerChatTransport` for the Vercel AI SDK's `useChat`), and `/chat/react`.
+**There is an official ClickHouse chat agent example**: https://github.com/triggerdotdev/examples/tree/main/clickhouse-chat-agent — `chat.agent()` + ClickHouse + Next.js + generative UI. Read it before building. But assume judges have seen it: the plumbing is solved there, so differentiate on the data layer and the interaction, not the wiring.
 
-These are new enough that blog examples may be wrong. **Treat the bundled type definitions as the source of truth**: `node_modules/@trigger.dev/sdk/dist/commonjs/v3/{ai,chat}.d.ts`. The SDK does *not* persist sessions for you — it exposes hooks and expects you to write to your own store.
+The real AI API (v4.5+, AI Agents are GA):
+
+| Use | API |
+|---|---|
+| Define an agent | `chat.agent({ id, run })` from `@trigger.dev/sdk/ai` |
+| Pipe a stream you can't `return` | `chat.pipe(result)` — *inside* an agent |
+| Task-backed AI tool | `ai.toolExecute(task)` — `ai.tool()` is deprecated |
+| Frontend | `useTriggerChatTransport` from `@trigger.dev/sdk/chat/react` |
+
+Docs: `/docs/ai-chat/*`. Machine-readable: https://trigger.dev/docs/llms.txt
+
+**`...chat.toStreamTextOptions()` must be spread, and spread first.** It wires `prepareStep`. Omit it and compaction, steering, and injection silently no-op.
+
+**Sessions are durable *compute and transport*, not durable *memory*.** The `.out` stream self-trims to ~one turn ("stays roughly one turn long forever at steady state"); full history lives in an S3 snapshot in *Trigger.dev's* bucket; `sessions.list()` returns metadata only, no messages; resume windows are 10–60s. Their own docs (`ai-chat/patterns/database-persistence`) assume you own the store. Wire `hydrateMessages` and the runtime treats your DB as the source of truth. This is *why* `03` puts session state in ClickHouse.
+
+Agent skills are installed in `.claude/skills/` (see pointer below) and are version-pinned to the SDK — prefer them over blog posts, which are mostly v3-era.
+
+<!-- TRIGGER.DEV SKILLS START -->
+## Trigger.dev agent skills
+
+This project has Trigger.dev agent skills installed in `.claude/skills/`. Before writing or changing Trigger.dev code (background tasks, scheduled tasks, realtime, or chat.agent AI agents), load the most relevant skill: `trigger-authoring-chat-agent`, `trigger-authoring-tasks`, `trigger-chat-agent-advanced`, `trigger-cost-savings`, `trigger-getting-started`, `trigger-realtime-and-frontend`.
+<!-- TRIGGER.DEV SKILLS END -->
