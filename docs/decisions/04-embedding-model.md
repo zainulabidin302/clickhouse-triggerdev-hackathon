@@ -54,6 +54,35 @@ const out = await extract(texts, { pooling: "mean", normalize: true });
 
 **Risk — cold start.** The task downloads ~80MB of ONNX weights on first run. Acceptable for a scheduled ingest; would not be for a per-request path. If it bites, cache the model in the build via a Trigger.dev build extension.
 
-**Risk — silent divergence.** If pooling or normalization is ever changed, nothing errors — retrieval just gets worse. **Mitigation:** as a smoke test, re-embed a handful of rows whose vectors are already in the dataset and assert cosine similarity ≈ 1.0 against the stored vector. Do this before ingesting anything at scale. It is the only way to *prove* we are in the right space rather than assume it.
+**Risk — silent divergence.** If pooling or normalization is ever changed, nothing errors — retrieval just gets worse. Mitigated by the retrieval probe below (`src/trigger/verify-embeddings.ts`), which fails loudly.
 
 **Accepted:** `all-MiniLM-L6-v2` is a 2021-era model, weaker than modern embeddings. We inherit the corpus's choice. Not worth 28M re-embeddings.
+
+## Verified against the live corpus — 2026-07-17
+
+**Confirmed: our query embeddings share the corpus's vector space.** Probes against 4.4M loaded rows returned strong semantic matches:
+
+| Query | Top results | Nearest distance |
+|---|---|---|
+| "Rust programming language memory safety" | memory safety, `unsafe`, security defects, safe-language debates | 0.144 |
+| "best espresso machine for home" | coffee, Nespresso machines, instant coffee | 0.188 |
+
+Real matches land at 0.14–0.24 cosine distance; unrelated vectors sit near 1.0. That gap is the proof.
+
+### Correction: how *not* to test this
+
+The mitigation originally recorded here — re-embed a row's `text`, assert cosine ≈ 1.0 against its stored vector — **was a bad test and it failed**. Similarities came back at 0.57–0.86, and on other samples near 0.05.
+
+That did not mean the model was wrong. It meant **the premise was wrong.** The `text` column is a *reconstructed thread window* — parent comment, this comment, and the reply, each author-prefixed:
+
+```
+beefsack:Swift is useful if you're an Apple developer...
+AlexeyBrin: Swift works reasonably well on Linux...
+beefsack: I tried under Arch a few months ago...
+```
+
+The stored vector is of whatever LlamaIndex fed the model when the dataset was built, which is not this reassembled string. (Corroborating: `length` = 71 while `text` is 395 chars — the column describes the original post, not the window.) So per-row reproduction measures *our guess at their preprocessing*, not whether we share a vector space. It can never reach 1.0 and tells us nothing.
+
+**The right test is retrieval:** does a query we embed pull back semantically relevant rows through their vectors? That is also the actual product requirement. `verify-embeddings` now asserts nearest-distance < 0.5 and non-zero keyword relevance across three probes.
+
+**Consequence for ingest.** We can embed new posts into the right *space*, but we cannot perfectly reproduce the corpus's *text construction*. New rows should mirror the thread-window format as closely as we can so old and new rows stay comparable in practice. Worth revisiting if retrieval quality on fresh posts looks off relative to historical ones.
