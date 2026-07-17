@@ -1,0 +1,19 @@
+{
+  "name": "hackathon",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "login": "npx trigger.dev@latest login",
+    "dev": "npx trigger.dev@latest dev",
+    "deploy": "npx trigger.dev@latest deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@clickhouse/client": "^1.13.0",
+    "@trigger.dev/sdk": "^4.5.4"
+  },
+  "devDependencies": {
+    "@trigger.dev/build": "^4.5.4",
+    "typescript": "^5.9.2"
+  }
+}
