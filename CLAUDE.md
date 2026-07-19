@@ -15,14 +15,10 @@ Scoring shapes every decision here. Tool usage is the largest bucket at 25%, and
 `docs/decisions/` holds numbered ADRs. They record *why*, including several conclusions that cost real investigation and contradict the obvious approach. **Read them before proposing architecture changes** — most "obvious" improvements have already been tried and rejected there for a reason.
 
 - `01` — dataset: Hacker News + prebuilt embeddings (28.7M rows), with the confirmed schema
-- `02` — agent architecture: build on `chat.agent()`, don't hand-roll the loop
-- `03` — session storage: ClickHouse via `hydrateMessages` (Sessions aren't durable memory)
+- `02` — agent architecture: use the SDK's chat primitives, don't hand-roll the loop
+- `03` — session storage: ClickHouse only, no Postgres (supersedes an earlier draft)
 - `04` — embedding model: all-MiniLM-L6-v2 via Transformers.js, and how *not* to test it
 - `05` — hybrid retrieval: the filter-strategy trap
-
-Several were revised after being wrong. Each records what was retracted and why — read the corrections, not just the conclusions. The recurring failure mode: inferring APIs and behaviour from `.d.ts` internals instead of reading the docs. Prefer `.claude/skills/trigger-*` (version-pinned to the SDK) and https://trigger.dev/docs/llms.txt.
-
-**Verified facts** (checked against live systems, not assumed): corpus is 28,737,557 rows / 47.98 GiB spanning **2006-10-09 → 2021-10-03** — a ~4.75yr gap to today, and 26,818 rows carry epoch timestamps, so time filters need `WHERE time > toDateTime(0)`. The table is **unindexed** — vector search full-scans. ClickHouse Cloud is 26.2.1.525.
 
 `docs/reference/` is durable fact (event rules, dataset evaluation). `docs/archive/` is superseded — don't act on it.
 

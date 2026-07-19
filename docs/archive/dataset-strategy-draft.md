@@ -3,7 +3,7 @@
 > **ARCHIVED 2026-07-17 — superseded.** The reasoning here was split into
 > [decision 01](../decisions/01-dataset-hacker-news.md) (dataset),
 > [02](../decisions/02-agent-architecture.md) (agent architecture),
-> [03](../decisions/03-session-storage.md) (OLTP+OLAP), and the
+> [03](../decisions/03-oltp-olap-split.md) (OLTP+OLAP), and the
 > [dataset reference](../reference/clickhouse-datasets.md).
 > Kept for the working-out; do not treat as current.
 
